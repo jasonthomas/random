@@ -1,0 +1,68 @@
+#!/bin/env perl
+# name: mstore
+# date: 20110515
+# author: jason thomas <jason@lithiumfox.com>
+# purpose: take results of measure(site analytics utility), parse and insert into mysql backend
+   
+use strict;
+use DBI;
+
+my $ns = "";
+my $host = "";
+my $time = time;
+
+export_results($time,$host,parse_results(measure($ns, $host)));
+
+sub measure {
+
+    my ($ns, $host) = @_;
+    my $measure_cmd = "/home/jason/bin/measure";
+    my @measure = ($measure_cmd, "-h", $host, "-p",  "80" ,"-u", "/",  $ns, $host);
+
+    open(STDERR, ">/dev/null");
+    my @results = `@measure`;
+    close (STDERR);
+    return @results;
+}
+
+sub parse_results {
+
+    my (@results) = @_;
+    my @captureMatrix;
+
+    foreach (@results){
+        my @capture = ( $_ =~ m/([\d\.]+)\s(?:ms|Bytes)/g);
+            if (@capture == "6"){
+                push @captureMatrix, [@capture];
+            }       
+    }
+    return @captureMatrix;
+}
+
+
+sub export_results {
+
+    my ($time, $host, @capture) = @_;
+
+    my %db = (
+        username => "",
+        password => "",
+        dbname => "",
+        dbtable => "",
+        mysqlhost => "",
+    );
+    
+    my $dbh = DBI->connect(
+            "DBI:mysql:database=$db{dbname};host=$db{mysqlhost}",
+            $db{username},
+            $db{password},
+            {'RaiseError'=> 1}
+    );
+    
+    for my $i ( 0 .. $#capture){
+        my $insert = sprintf("INSERT INTO $db{dbtable} VALUES (FROM_UNIXTIME($time), $i, '$host', $capture[$i][0], $capture[$i][1], $capture[$i][2], $capture[$i][3], $capture[$i][4], $capture[$i][5])");
+        eval {$dbh->do($insert)};
+        print "Inserting to $db{dbtable} failed: $@\n" if $@;
+    }
+    $dbh->disconnect();
+}
