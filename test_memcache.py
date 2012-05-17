@@ -1,4 +1,3 @@
-cat test_memcache.py 
 #!/usr/bin/python
 import memcache
 import string
@@ -27,10 +26,6 @@ def junk_to_memcache():
         mc_couchbase4.set(key,value)
 # Create two threads as follows
 try:
-   thread.start_new_thread(junk_to_memcache, ())
-   thread.start_new_thread(junk_to_memcache, ())
-   thread.start_new_thread(junk_to_memcache, ())
-   thread.start_new_thread(junk_to_memcache, ())
    thread.start_new_thread(junk_to_memcache, ())
    thread.start_new_thread(junk_to_memcache, ())
    thread.start_new_thread(junk_to_memcache, ())
