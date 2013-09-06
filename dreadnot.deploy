@@ -1,0 +1,60 @@
+#!/bin/env python
+# commandline deployer for dreadnot
+
+import os
+import requests
+from optparse import OptionParser
+from ConfigParser import SafeConfigParser
+
+
+# config file should be ini format
+def configure(config_file, env):
+    config = {}
+    conf = SafeConfigParser()
+
+    if conf.read(config_file):
+        config['username'] = conf.get(env, 'username')
+        config['password'] = conf.get(env, 'password')
+        config['dreadnot'] = conf.get(env, 'dreadnot')
+    else:
+        print 'No configuration found'
+
+    return config
+
+
+# deploy the goodness
+def deploy(dreadnot, username, password, app_name, revision):
+    DREADNOT_DEPLOY = '%s/api/1.0/stacks/%s/regions/phx1/deployments' % (dreadnot, app_name)
+    TO_REVISION = {'to_revision': revision}
+
+    r = requests.post(DREADNOT_DEPLOY, data=TO_REVISION,
+                      auth=(username, password))
+
+
+def main():
+    parser = OptionParser(usage="usage: %prog [options] app_name")
+    parser.add_option("-c", "--conf",
+                      default='/etc/dreadnot.webdeployer',
+                      type='string',
+                      help="Configuration File")
+    parser.add_option("-e", "--environment",
+                      default='dev',
+                      type='string',
+                      help="Environment you want to deploy to")
+    parser.add_option("-r", "--revision",
+                      default='origin/master',
+                      type='string',
+                      help="Git Revision")
+
+    (options, args) = parser.parse_args()
+
+    if len(args) != 1:
+        parser.error("wrong number of arguments")
+
+    app_name = args[0]
+    config = configure(options.conf, options.environment)
+    deploy(config['dreadnot'], config['username'], config['password'],
+           app_name, options.revision)
+
+if __name__ == '__main__':
+    main()
