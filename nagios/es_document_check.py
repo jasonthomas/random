@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # check to see if documents exists for a specific query
 
-from elasticsearch import Elasticsearch
 from optparse import OptionParser
 from datetime import datetime, timedelta
 import sys
+import urllib2
+import json
 
 
 def get_date(delay):
@@ -14,9 +15,10 @@ def get_date(delay):
 
 
 def check_query(host, index, date):
-    es = Elasticsearch(host=host)
-    body =  {'query': {'term': {'date': date}}}
-    result = es.search(index, body=body)
+    body = json.dumps({'query': {'term': {'date': date}}})
+    url = "http://%s:9200/%s/_search" % (host, index)
+    req = urllib2.Request(url, body, {'Content-Type': 'application/json'})
+    result = json.loads(urllib2.urlopen(req).read())
     return result['hits']['total']
 
 
@@ -40,7 +42,7 @@ def main():
                       type='string',
                       help="Elasticsearch Host")
     parser.add_option("-i", "--index",
-                      default='',
+                      default='*',
                       type='string',
                       help="Elasticsearch index")
 
