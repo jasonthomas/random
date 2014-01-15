@@ -31,14 +31,6 @@ def alert(result, date):
 
 def main():
     parser = OptionParser(usage="usage: %prog [options]")
-    parser.add_option("-w", "--warning",
-                      default=60,
-                      type='int',
-                      help="Seconds before warning")
-    parser.add_option("-c", "--critical",
-                      default=120,
-                      type='int',
-                      help="Seconds before critical")
     parser.add_option("-d", "--delay",
                       default=9,
                       type=int,
