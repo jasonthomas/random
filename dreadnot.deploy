@@ -23,12 +23,13 @@ def configure(config_file, env):
 
 
 # deploy the goodness
-def deploy(dreadnot, username, password, app_name, revision):
-    DREADNOT_DEPLOY = '%s/api/1.0/stacks/%s/regions/phx1/deployments' % (dreadnot, app_name)
+def deploy(dreadnot, username, password, app_name, revision,
+           ssl_verify=False, location='phx1'):
+    DREADNOT_DEPLOY = '%s/api/1.0/stacks/%s/regions/%s/deployments' % (dreadnot, app_name, location)
     TO_REVISION = {'to_revision': revision}
 
     r = requests.post(DREADNOT_DEPLOY, data=TO_REVISION,
-                      auth=(username, password))
+                      auth=(username, password), verify=ssl_verify)
 
 
 def main():
