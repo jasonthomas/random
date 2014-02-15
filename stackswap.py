@@ -77,10 +77,16 @@ def is_healthy(status):
 
 
 # busy spin to check if elb is healthy
-def check_elb_health(elbname, conn):
+def check_elb_health(elbname, conn, sleep=30):
+    elapsed = 0
     while not is_healthy(get_instance_health(elbname, conn)):
         print "waiting on health..."
-        time.sleep(30)
+        time.sleep(sleep)
+        elapsed += sleep
+        # wait 15 minutes, if not bail
+        if elapsed >= 900:
+            print "elb failed to be healthy"
+            return False
     print "all instances healthy"
     return True
 
@@ -156,14 +162,17 @@ def main():
             cloud.delete_stack(current_stack_name)
             print "deleting previous stack: %s" % current_stack_name
 
-        #current_stack_name = check_equal(get_instance_stackname(instances))
+            sys.exit(0)
+            #current_stack_name = check_equal(get_instance_stackname(instances))
+            # sleep
+            #time.sleep(120)
+            # verify that there is only one stack
 
-        # sleep
-        #time.sleep(120)
+        else:
+            print "new stack failed. deleting: %s" % output[1]
+            cloud.delete_stack(output[1])
+            sys.exit(1)
 
-        # verify that there is only one stack
-
-        sys.exit(0)
     else:
         print 'Multiple stacks attached to ELB. Is this okay?'
         sys.exit(1)
