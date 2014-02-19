@@ -96,7 +96,7 @@ def create_stack(stack_name, template_file, conn, parameters=None):
 def stack_wait(stack_id, conn):
     start = time.time()
     while (time.time() - start) < 900:
-        stack = conn.describe_stacks(stack_id)
+        stack = conn.describe_stacks(stack_id)[0]
         if stack.stack_status != 'CREATE_IN_PROGRESS':
             return stack.stack_status
         time.sleep(30)
