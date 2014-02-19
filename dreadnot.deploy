@@ -16,6 +16,7 @@ def configure(config_file, env):
         config['username'] = conf.get(env, 'username')
         config['password'] = conf.get(env, 'password')
         config['dreadnot'] = conf.get(env, 'dreadnot')
+        config['region'] = conf.get(env, 'region')
     else:
         print 'No configuration found'
 
@@ -23,9 +24,9 @@ def configure(config_file, env):
 
 
 # deploy the goodness
-def deploy(dreadnot, username, password, app_name, revision,
-           ssl_verify=False, location='phx1'):
-    DREADNOT_DEPLOY = '%s/api/1.0/stacks/%s/regions/%s/deployments' % (dreadnot, app_name, location)
+def deploy(dreadnot, username, password, region, app_name, revision,
+           ssl_verify=False):
+    DREADNOT_DEPLOY = '%s/api/1.0/stacks/%s/regions/%s/deployments' % (dreadnot, app_name, region)
     TO_REVISION = {'to_revision': revision}
 
     r = requests.post(DREADNOT_DEPLOY, data=TO_REVISION,
@@ -53,9 +54,9 @@ def main():
         parser.error("wrong number of arguments")
 
     app_name = args[0]
-    config = configure(options.conf, options.environment)
+    config = configure(options.conf, options.environment, options.region)
     deploy(config['dreadnot'], config['username'], config['password'],
-           app_name, options.revision)
+           config['region'], app_name, options.revision)
 
 if __name__ == '__main__':
     main()
