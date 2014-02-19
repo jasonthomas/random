@@ -4,30 +4,14 @@
 import boto.ec2.elb
 import boto.ec2
 import boto.cloudformation
-import re
 import time
 import sys
 import json
 from optparse import OptionParser
-from ConfigParser import SafeConfigParser
 
 
 # This will cause full debug output to go to the console
 #boto.set_stream_logger('foo')
-
-# config file should be ini format
-def configure(config_file, env):
-    config = {}
-    conf = SafeConfigParser()
-
-    if conf.read(config_file):
-        config['key'] = conf.get(env, 'key')
-        config['secret'] = conf.get(env, 'secret')
-    else:
-        print 'No configuration found'
-
-    return config
-
 
 # returns a list of ec2 instance ids attached to a lb
 def get_instance_ids(elbname, conn):
@@ -39,7 +23,15 @@ def get_instance_ids(elbname, conn):
     return instance_ids
 
 
-def get_instance_health(elbname, conn):
+# return a list of ec2 instances belonging to stack_id
+def get_stack_instance_ids(stack_id, conn):
+    filters = {'tag:aws:cloudformation:stack-id': stack_id}
+
+    return [i.id for i in conn.get_only_instances(filters=filters)]
+
+
+# if instances is a list, pass it to describe_instance_health
+def get_instance_health(elbname, conn, instances=None):
     instance_states = []
 
     for instance in conn.describe_instance_health(elbname):
@@ -51,12 +43,8 @@ def get_instance_health(elbname, conn):
 # returns a list of ec2 stacknames
 def get_instance_stackname(instance_ids, conn):
     tagname = 'aws:cloudformation:stack-name'
-    stack_names = []
-    for reservation in conn.get_all_reservations(instance_ids=instance_ids):
-        for instance in reservation.instances:
-            stack_names.append(instance.tags[tagname])
-
-    return stack_names
+    return [i.tags[tagname]
+        for i in conn.get_only_instances(instance_ids=instance_ids)]
 
 
 # checks list to see if values are identical
@@ -77,9 +65,9 @@ def is_healthy(status):
 
 
 # busy spin to check if elb is healthy
-def check_elb_health(elbname, conn, sleep=30):
+def check_elb_health(elbname, conn, instances=None, sleep=30):
     elapsed = 0
-    while not is_healthy(get_instance_health(elbname, conn)):
+    while not is_healthy(get_instance_health(elbname, conn, instances)):
         print "waiting on health..."
         time.sleep(sleep)
         elapsed += sleep
@@ -105,12 +93,19 @@ def create_stack(stack_name, template_file, conn, parameters=None):
         print e
 
 
+def stack_wait(stack_id, conn):
+    start = time.time()
+    while (time.time() - start) < 900:
+        stack = conn.describe_stacks(stack_id)
+        if stack.stack_status != 'CREATE_IN_PROGRESS':
+            return stack.stack_status
+        time.sleep(30)
+
+    return 'TIMED_OUT'
+
+
 def main():
-    parser = OptionParser(usage="usage: %prog [options] stack_name elb_name template_file")
-    parser.add_option("-c", "--conf",
-                      default='/etc/aws',
-                      type='string',
-                      help="AWS Credentials")
+    parser = OptionParser(usage="usage: %prog [options] stack_name elb_name template_file") # flake8: noqa
     parser.add_option("-r", "--region",
                       default='us-east-1',
                       type='string',
@@ -125,17 +120,13 @@ def main():
     if len(args) != 3:
         parser.error("wrong number of arguments")
 
-    config = configure(options.conf, options.environment)
-
-    KEY = config['key']
-    SECRET = config['secret']
     STACKNAME = args[0]
     ELBNAME = args[1]
     STACKTEMPLATE = args[2]
 
-    elb = boto.ec2.elb.ELBConnection(aws_access_key_id=KEY,aws_secret_access_key=SECRET)
-    ec2 = boto.ec2.connection.EC2Connection(aws_access_key_id=KEY, aws_secret_access_key=SECRET)
-    cloud = boto.cloudformation.connection.CloudFormationConnection(aws_access_key_id=KEY, aws_secret_access_key=SECRET, debug=0)
+    elb = boto.ec2.elb.ELBConnection()
+    ec2 = boto.ec2.connection.EC2Connection()
+    cloud = boto.cloudformation.connection.CloudFormationConnection(debug=0)
 
     # get instances associated with a elb
     instances = get_instance_ids(ELBNAME, elb)
@@ -147,30 +138,29 @@ def main():
     # we should bail if there is as there should always only be one
     if current_stack_name is not False:
         # create the new stack
-        output = create_stack(STACKNAME, STACKTEMPLATE, cloud)
-        print "building new stack: %s" % output[1]
+        stack_id, stack_name = create_stack(STACKNAME, STACKTEMPLATE, cloud)
+        print "building new stack: %s" % stack_name
 
-        # sleep for a little bit while stack ec2 instances are coming up
-        print "sleeping for 300 seconds"
-        time.sleep(300)
+        # Wait for stack creation to complete.
+        state = stack_wait(stack_id, cloud)
+        if state != 'CREATE_COMPLETE':
+            print "new stack creation failed with state: %s" % state
+            sys.exit(1)
 
         # check the health of instances attached to the elb
         # once this returns True we can delete the previous stack
-        if check_elb_health(ELBNAME, elb):
-            print "new stack is ready: %s" % output[1]
+        new_instances = get_stack_instance_ids(stack_id, ec2)
+        if check_elb_health(ELBNAME, elb, instances=new_instances):
+            print "new stack is ready: %s" % stack_name
 
             cloud.delete_stack(current_stack_name)
             print "deleting previous stack: %s" % current_stack_name
 
             sys.exit(0)
-            #current_stack_name = check_equal(get_instance_stackname(instances))
-            # sleep
-            #time.sleep(120)
-            # verify that there is only one stack
 
         else:
-            print "new stack failed. deleting: %s" % output[1]
-            cloud.delete_stack(output[1])
+            print "new stack failed. deleting: %s" % stack_name
+            cloud.delete_stack(stack_name)
             sys.exit(1)
 
     else:
