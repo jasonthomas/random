@@ -54,7 +54,7 @@ def main():
         parser.error("wrong number of arguments")
 
     app_name = args[0]
-    config = configure(options.conf, options.environment, options.region)
+    config = configure(options.conf, options.environment)
     deploy(config['dreadnot'], config['username'], config['password'],
            config['region'], app_name, options.revision)
 
