@@ -1,0 +1,9 @@
+[package]
+name = "hammer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+futures = "0.3.26"
+reqwest = "0.11.14"
+tokio = { version = "1.25.0", features = ["rt", "full"] }
